@@ -1,26 +1,37 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
+import re
+import os
+import requests
+import json
 from mastodon import Mastodon
 from mastodon.streaming import StreamListener
-import re
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2 import service_account
 import gspread
-
+from pyjosa.josa import Josa
+from dotenv import load_dotenv
+load_dotenv()
 
 # 구글시트 세팅
-
-
 scope = ["https://spreadsheets.google.com/feeds",
          "https://www.googleapis.com/auth/spreadsheets",
          "https://www.googleapis.com/auth/drive.file",
          "https://www.googleapis.com/auth/drive"]
 
+
 creds = ServiceAccountCredentials.from_json_keyfile_name("dicebot-394804-ea8603f0116f.json", scope)
 gc = gspread.authorize(creds)
-sh = gc.open_by_url('https://docs.google.com/spreadsheets/d/1H_3YqJIv1UhdgEq4x4217VuP5Oerryl3YMDaXOuxCtw/edit?usp=sharing')
-search = sh.worksheet("조사")
+sh = gc.open_by_url(os.getenv('https://docs.google.com/spreadsheets/d/1H_3YqJIv1UhdgEq4x4217VuP5Oerryl3YMDaXOuxCtw/edit?usp=sharing'))
+search = sh.worksheet(os.getenv('조사'))
 
-# 구글시트 세팅 끝
+BASE = os.getenv('https://occm.cc')
+
+m = Mastodon(
+    client_id=os.getenv('nJdRpfOqaXu_GPVtYHveFZf4DjW9buP7GWhAWkwTKWw'),
+    client_secret=os.getenv('sAVZl6IwZHfXlfyN_SnOrTfGebT3ptEKQSwzJBBJhH0'),
+    access_token=os.getenv('pmzXJoUCKfmM-ShhcHiDZTo8y0-7wsG8xeNRMpW20D8'),
+    api_base_url=BASE
+)
 
 print('성공적으로 로그인 되었습니다.')
 
@@ -165,4 +176,6 @@ def main():
     m.stream_user(Listener())
 
 if __name__ == '__main__':
+    main()
+
     main()
