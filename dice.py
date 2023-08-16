@@ -66,7 +66,7 @@ def post_at_time():
         print(f'다음과 같은 오류가 발생하였습니다: {e}')
 
 
-schedule.every().day.at("00:00").do(post_at_time)
+schedule.every().day.at("01:31").do(post_at_time)
 
 
 while True:
