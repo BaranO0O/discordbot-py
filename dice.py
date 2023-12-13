@@ -1,11 +1,10 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 from mastodon import Mastodon
+from mastodon.streaming import StreamListener
+import re
 from oauth2client.service_account import ServiceAccountCredentials
 import gspread
-import schedule
-import time
-import datetime
 
 
 # 구글시트 세팅
@@ -16,9 +15,9 @@ scope = ["https://spreadsheets.google.com/feeds",
          "https://www.googleapis.com/auth/drive.file",
          "https://www.googleapis.com/auth/drive"]
 
-creds = ServiceAccountCredentials.from_json_keyfile_name("dicebot-394804-ea8603f0116f.json", scope)
+creds = ServiceAccountCredentials.from_json_keyfile_name("my-project-64703-9cf112921d15.json", scope)
 gc = gspread.authorize(creds)
-sh = gc.open_by_url('https://docs.google.com/spreadsheets/d/1H_3YqJIv1UhdgEq4x4217VuP5Oerryl3YMDaXOuxCtw/edit?usp=sharing')
+sh = gc.open_by_url('https://docs.google.com/spreadsheets/d/1X9fqj70pkQqM6WMZEUOQUUhVjkzM8CJsbjxp93NJoHg/edit?usp=sharing')
 search = sh.worksheet("조사")
 timed = sh.worksheet("예약")
 
@@ -26,12 +25,12 @@ timed = sh.worksheet("예약")
 
 # 마스토돈 계정 세팅
 
-BASE = 'https://occm.cc'
+BASE = 'https://lucemnoctis.online'
 
 m = Mastodon(
-    client_id="w9Yrf034cWrQvGI2n-NATWB48-gDhMAJAWA9oc4JZjg",
-    client_secret="vIvfRD6fi_ftm65Gu6j5vDiMychnSreKj-_4K_ttNNs",
-    access_token="uvbAlR6YoUlyuFNf0dPptxt7yZsaOnTZrnz2iwjUJew",
+    client_id="jJO2wDLbpFMiugWsVZE1S4nGQcwSoIJZQii-dIK_WY8",
+    client_secret="PxUS3yWRbZAf84QlGvVojUSKp3b2s1COnv_b-uK3_ig",
+    access_token="YDckxaaDI-0Z9iq6GDZ235qpyU6YBVOpXKdhzn53XIs",
     api_base_url=BASE
 )
 
@@ -39,35 +38,59 @@ print('성공적으로 로그인 되었습니다.')
 
 # 마스토동 계정 세팅 끝
 
-def post_at_time():
-    toots = timed.get("C3:C7", value_render_option="UNFORMATTED_VALUE")
-    print(toots)
-    posting_date = datetime.datetime.now()
-    print(posting_date)
-    p_year = posting_date.year
-    p_month = posting_date.month
-    p_day = posting_date.day
-    kst = datetime.timezone(datetime.timedelta(hours=9))
-    try:
-        m.status_post(f"{toots[0][0]}", scheduled_at=datetime.datetime(p_year, p_month, p_day, 1, 00, tzinfo=kst), visibility='private')
-        print('통금툿 예약 완료')
-        m.status_post(f"{toots[1][0]}", scheduled_at=datetime.datetime(p_year, p_month, p_day, 7, 00, tzinfo=kst), visibility='private')
-        print('아침 점호툿 예약 완료')
-        m.status_post(f"{toots[2][0]}", scheduled_at=datetime.datetime(p_year, p_month, p_day, 12, 00, tzinfo=kst), visibility='private')
-        print('점심 식단툿 예약 완료')
-        m.status_post(f"{toots[3][0]}", scheduled_at=datetime.datetime(p_year, p_month, p_day, 17, 00, tzinfo=kst), visibility='private')
-        print('저녁 식단툿 예약 완료')
-        m.status_post(f"{toots[4][0]}", scheduled_at=datetime.datetime(p_year, p_month, p_day, 21, 00, tzinfo=kst), visibility='private')
-        print('일일의뢰 종료툿 예약 완료')
-        print('전체 예약 완료')
-        look = m.scheduled_statuses()
-        print(look)
-    except Exception as e:
-        print(f'다음과 같은 오류가 발생하였습니다: {e}')
+
+CLEANR = re.compile('<.*?>')
+
+def cleanhtml(raw_html):
+  cleantext = re.sub(CLEANR, '', raw_html)
+  return cleantext
 
 
-schedule.every().day.at("00:00").do(post_at_time)
+def getkey(toot_body):
+    match = re.search(r'\[(.*?)\]', toot_body)
+    return match.group(1) if match else None
 
+
+class Listener(StreamListener):
+
+    def on_notification(self, notification):
+        if notification['type'] == 'mention':
+            got = cleanhtml(notification['status']['content'])
+            keyword = getkey(got)
+
+            if keyword is None:
+                return
+            
+            try:
+                look = search.find(keyword, in_column=1, case_sensitive=True).row
+                result = search.get(f"R{look}C2:R{look}C5", value_render_option="UNFORMATTED_VALUE")[0]
+                 
+                if result[1] is True:
+                    try:
+                        if result[2] is True:
+                            if len(result) > 3:
+                                m.status_post(f"@{notification['status']['account']['acct']} {result[3]}", in_reply_to_id=notification['status']['id'], visibility='private')
+                            else:
+                                print(f'방문된 후의 지문이 별도로 기입되어 있지 않습니다. 해당 키워드의 조사 후 지문을 기입해주세요: {keyword}')
+                                m.status_post(f"@{notification['status']['account']['acct']} {result[0]}", in_reply_to_id= notification['status']['id'], visibility='private')
+                            return
+                        else:
+                            m.status_post(f"@{notification['status']['account']['acct']} {result[0]}", in_reply_to_id= notification['status']['id'], visibility='private')
+                            search.update_cell(look, 4, 'TRUE')
+                    except Exception as e:
+                        print(f'체크 관련 오류 발생: {e}')
+                else:
+                    m.status_post(f"@{notification['status']['account']['acct']} {result[0]}", in_reply_to_id=notification['status']['id'], visibility='private')
+                    search.update_cell(look, 4, 'TRUE')
+                    search.update_cell(look, 4, 'FALSE')
+            except AttributeError:
+                m.status_post(f"@{notification['status']['account']['acct']} [{keyword}]는(은) 존재하지 않는 키워드입니다.\n만일 오류라고 판단되는 경우 운영진, 혹은 봇의 관리자에게 연락을 주세요.", in_reply_to_id=result, visibility='private')
+
+def main():
+    m.stream_user(Listener())
+
+if __name__ == '__main__':
+    main()
 
 while True:
     schedule.run_pending()
