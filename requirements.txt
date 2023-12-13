@@ -1,4 +1,3 @@
-Mastodon.py
-oauth2client
+mastodon.py
 gspread
-schedule
+oauth2client
